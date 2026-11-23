@@ -1,23 +1,29 @@
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Callable, Literal, Mapping
+from typing import Callable, Mapping
 
+from .contracts import (
+    Attempt,
+    Check,
+    Feedback,
+    Model,
+    ModelError,
+    ModelReply,
+    Policy,
+    Role,
+    Route,
+    Router,
+    Run,
+    RunStatus,
+    Task,
+    Usage,
+)
 
-Role = Literal["fast", "strong"]
-Policy = Literal["fixed", "feedback"]
-
-
-@dataclass(frozen=True)
-class Task:
-    prompt: str
-    difficulty: float
-
-
-@dataclass(frozen=True)
-class Route:
-    model: Role
-    score: float
-    threshold: float
+# Keep the original public imports available from core.
+__all__ = [
+    "Attempt", "Check", "Feedback", "Model", "ModelError", "ModelReply", "Policy",
+    "Role", "Route", "Run", "Task", "ThresholdRouter", "Usage", "run_task",
+]
 
 
 @dataclass(frozen=True)
@@ -31,67 +37,10 @@ class ThresholdRouter:
         return Route(model, task.difficulty, self.threshold)
 
 
-@dataclass(frozen=True)
-class Check:
-    passed: bool
-    code: str
-    summary: str
-
-
-@dataclass(frozen=True)
-class Feedback:
-    candidate: str | None
-    check: Check
-
-
-@dataclass(frozen=True)
-class Usage:
-    prompt_tokens: int | None = None
-    completion_tokens: int | None = None
-    reasoning_tokens: int | None = None
-
-
-@dataclass(frozen=True)
-class ModelReply:
-    model: str
-    text: str | None
-    finish_reason: str | None = None
-    usage: Usage = Usage()
-
-
-class ModelError(Exception):
-    """A transport or response error, distinct from a failed candidate check."""
-
-
-Model = Callable[[Task, Feedback | None], ModelReply]
-
-
-@dataclass(frozen=True)
-class Attempt:
-    role: Role
-    model: str | None
-    model_ms: float
-    finish_reason: str | None
-    usage: Usage | None
-    check: Check | None
-    decision: str
-    reason: str
-
-
-@dataclass(frozen=True)
-class Run:
-    route: Route
-    policy: Policy
-    attempts: tuple[Attempt, ...]
-    status: Literal["passed", "failed", "model_error"]
-    output: str | None
-    elapsed_ms: float
-
-
 def run_task(
     task: Task,
     *,
-    router: Callable[[Task], Route],
+    router: Router,
     models: Mapping[Role, Model],
     verify: Callable[[str], Check],
     policy: Policy = "feedback",
@@ -109,7 +58,7 @@ def run_task(
     feedback = None
     fast_attempts = 0
     output = None
-    status: Literal["passed", "failed", "model_error"] = "failed"
+    status: RunStatus = "failed"
 
     while True:
         call_started = perf_counter()
@@ -134,23 +83,34 @@ def run_task(
             status = "model_error"
             break
         if reply.finish_reason == "length":
-            check = Check(False, "output_truncated", "The model reached its output limit.")
+            check = Check(
+                False, "output_truncated", "The model reached its output limit.",
+                kind="candidate_error",
+            )
         elif reply.text is None or not reply.text.strip():
-            check = Check(False, "empty_output", "The model returned no candidate.")
+            check = Check(
+                False, "empty_output", "The model returned no candidate.",
+                kind="candidate_error",
+            )
         else:
             check = verify(reply.text)
 
         if role == "fast":
             fast_attempts += 1
 
-        if check.passed:
+        if check.kind == "environment_error":
+            decision, reason = "stop", "verification_environment_error"
+            status = "verification_error"
+        elif check.passed:
             decision, reason = "accept", "verification_passed"
             status, output = "passed", reply.text
         elif role == "strong":
             decision, reason = "stop", "strong_verification_failed"
         elif fast_attempts >= max_fast_attempts:
             decision, reason = "escalate", "fast_attempt_limit"
-        elif policy == "feedback" and feedback and feedback.check.code == check.code:
+        elif policy == "feedback" and feedback and (
+            feedback.check.kind, feedback.check.code
+        ) == (check.kind, check.code):
             decision, reason = "escalate", "repeated_failure"
         else:
             decision, reason = "retry", "fast_attempts_remaining"

@@ -4,7 +4,7 @@ import json
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from .core import Feedback, ModelError, ModelReply, Task, Usage
+from .contracts import Feedback, ModelError, ModelReply, Task, Usage
 
 
 @dataclass(frozen=True)
