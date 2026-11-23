@@ -1,0 +1,24 @@
+{
+  "initial_role": "fast",
+  "status": "passed",
+  "attempts": [
+    {
+      "role": "fast",
+      "check_code": "test_failed:test_invalid_page,test_invalid_page_size",
+      "decision": "retry",
+      "reason": "fast_attempts_remaining"
+    },
+    {
+      "role": "fast",
+      "check_code": "test_failed:test_invalid_page,test_invalid_page_size",
+      "decision": "escalate",
+      "reason": "repeated_failure"
+    },
+    {
+      "role": "strong",
+      "check_code": "passed",
+      "decision": "accept",
+      "reason": "verification_passed"
+    }
+  ]
+}

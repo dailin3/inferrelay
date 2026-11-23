@@ -1,0 +1,9 @@
+{
+  "task_id": "paginate-boundaries",
+  "base_revision": "pagination-v1",
+  "prompt": "Fix paginate(items, page, page_size) in pagination.py. Pages are 1-based. Return the items for the requested page in their original order. The last page may be shorter, and a page past the end returns an empty list. Raise ValueError when page or page_size is less than 1. Return one unified diff against the original source.",
+  "difficulty": 0.25,
+  "source_paths": ["pagination.py"],
+  "allowed_paths": ["pagination.py"],
+  "check_ids": ["pagination_unit_tests"]
+}
